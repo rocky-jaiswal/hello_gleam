@@ -17,3 +17,15 @@ pub fn file_read_test() {
   cities
   |> should.be_ok
 }
+
+pub fn sort_test() {
+  let hottest_city =
+    hello_gleam.sort_results([
+      hello_gleam.CityTemp("1", 10, 19),
+      hello_gleam.CityTemp("2", 12, 24),
+      hello_gleam.CityTemp("3", 13, 22),
+    ])
+
+  hottest_city
+  |> should.equal("2")
+}

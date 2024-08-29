@@ -14,7 +14,7 @@ pub type FileParsingError {
   FileParsingError(msg: String)
 }
 
-type CityTemp {
+pub type CityTemp {
   CityTemp(city_name: String, min_temp: Int, max_temp: Int)
 }
 
@@ -45,9 +45,19 @@ pub fn read_cities_from_file(file_name: String) {
     }
     Error(err) -> {
       io.print_error(simplifile.describe_error(err))
-      Error(FileParsingError("fail"))
+      Error(FileParsingError("cannot read / parse file"))
     }
   }
+}
+
+fn build_requests(
+  city_names: List(String),
+) -> Result(List(request.Request(String)), Nil) {
+  result.all(
+    list.map(city_names, fn(city) {
+      request.to("http://localhost:3001/v1/weatherByCity/" <> city)
+    }),
+  )
 }
 
 fn make_requests_async(reqs: List(request.Request(String))) {
@@ -61,8 +71,12 @@ fn make_requests_async(reqs: List(request.Request(String))) {
       city_temp_from_json(x.body)
     })
 
+  result.all(lst_city_temp)
+}
+
+pub fn sort_results(lst_city_temp: List(CityTemp)) {
   let sorted =
-    list.sort(result.unwrap(result.all(lst_city_temp), []), fn(city1, city2) {
+    list.sort(lst_city_temp, fn(city1, city2) {
       int.compare(city1.max_temp, city2.max_temp)
     })
 
@@ -79,28 +93,25 @@ fn make_requests_async(reqs: List(request.Request(String))) {
 pub fn main() {
   io.println("Finding hottest city...")
 
-  let cities = read_cities_from_file("cities.csv")
+  // read cities
+  // build requests
+  // make requests in parallel
+  // get hottest city
 
-  let reqs =
-    result.try(cities, fn(lst_city) {
-      Ok(
-        list.map(lst_city, fn(city) {
-          request.to("http://localhost:3001/v1/weatherByCity/" <> city)
-        }),
-      )
-    })
+  let cities = result.unwrap(read_cities_from_file("cities.csv"), [])
+  let reqs = build_requests(cities)
 
-  let hottest_city = case reqs {
+  let lst_city_temp = case reqs {
     Ok(lst_res_req) -> {
-      let all_res = result.all(lst_res_req)
-      let req = result.unwrap(all_res, [])
-      make_requests_async(req)
+      make_requests_async(lst_res_req)
     }
     Error(err) -> {
       io.debug(err)
-      ""
+      Error(json.UnexpectedEndOfInput)
     }
   }
 
-  io.println("Answer is - " <> hottest_city)
+  let answer = sort_results(result.unwrap(lst_city_temp, []))
+
+  io.debug("Answer is - " <> answer)
 }
