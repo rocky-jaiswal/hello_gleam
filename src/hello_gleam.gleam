@@ -1,6 +1,7 @@
 import gleam/dynamic.{field, int, list, string}
 import gleam/hackney
 import gleam/http/request
+import gleam/http/response
 import gleam/int
 import gleam/io
 import gleam/json
@@ -60,16 +61,17 @@ fn build_requests(
   )
 }
 
-fn make_requests_async(reqs: List(request.Request(String))) {
-  let results =
-    list.map(reqs, fn(req) { task.async(fn() { hackney.send(req) }) })
+fn make_requests_async(reqs) {
+  let tasks = list.map(reqs, fn(req) { task.async(fn() { hackney.send(req) }) })
 
-  let responses = list.map(results, fn(tsk) { task.await_forever(tsk) })
+  let responses = list.map(tasks, fn(tsk) { task.await_forever(tsk) })
 
+  result.all(responses)
+}
+
+fn parse_responses(responses: List(response.Response(String))) {
   let lst_city_temp =
-    list.map(result.unwrap(result.all(responses), []), fn(x) {
-      city_temp_from_json(x.body)
-    })
+    list.map(responses, fn(res) { city_temp_from_json(res.body) })
 
   result.all(lst_city_temp)
 }
@@ -85,9 +87,7 @@ pub fn sort_results(lst_city_temp: List(CityTemp)) {
 
   let city_max_temp = list.last(sorted)
 
-  let city_name = result.try(city_max_temp, fn(c) { Ok(c.city_name) })
-
-  result.unwrap(city_name, "")
+  result.try(city_max_temp, fn(c) { Ok(c.city_name) })
 }
 
 pub fn main() {
@@ -96,22 +96,14 @@ pub fn main() {
   // read cities
   // build requests
   // make requests in parallel
+  // parse response
   // get hottest city
 
   let cities = result.unwrap(read_cities_from_file("cities.csv"), [])
-  let reqs = build_requests(cities)
-
-  let lst_city_temp = case reqs {
-    Ok(lst_res_req) -> {
-      make_requests_async(lst_res_req)
-    }
-    Error(err) -> {
-      io.debug(err)
-      Error(json.UnexpectedEndOfInput)
-    }
-  }
-
-  let answer = sort_results(result.unwrap(lst_city_temp, []))
+  let reqs = result.unwrap(build_requests(cities), [])
+  let responses = result.unwrap(make_requests_async(reqs), [])
+  let cities = result.unwrap(parse_responses(responses), [])
+  let answer = result.unwrap(sort_results(cities), "")
 
   io.debug("Answer is - " <> answer)
 }

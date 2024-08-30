@@ -1,3 +1,4 @@
+import gleam/result
 import gleeunit
 import gleeunit/should
 
@@ -27,5 +28,6 @@ pub fn sort_test() {
     ])
 
   hottest_city
-  |> should.equal("2")
+  |> result.nil_error
+  |> should.equal(Ok("2"))
 }
