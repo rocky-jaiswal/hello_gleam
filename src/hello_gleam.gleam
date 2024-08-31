@@ -11,10 +11,6 @@ import gleam/result
 import gleam/string
 import simplifile
 
-pub type FileParsingError {
-  FileParsingError(msg: String)
-}
-
 pub type CityTemp {
   CityTemp(city_name: String, min_temp: Int, max_temp: Int)
 }
@@ -46,34 +42,51 @@ pub fn read_cities_from_file(file_name: String) {
     }
     Error(err) -> {
       io.print_error(simplifile.describe_error(err))
-      Error(FileParsingError("cannot read / parse file"))
+      Error("cannot read / parse file")
     }
   }
 }
 
-fn build_requests(
-  city_names: List(String),
-) -> Result(List(request.Request(String)), Nil) {
-  result.all(
+fn build_requests(city_names: List(String)) {
+  let res =
     list.map(city_names, fn(city) {
       request.to("http://localhost:3001/v1/weatherByCity/" <> city)
-    }),
-  )
+    })
+
+  case result.all(res) {
+    Ok(ok_result) -> Ok(ok_result)
+    Error(err) -> {
+      io.debug(err)
+      Error("cannot build requests")
+    }
+  }
 }
 
-fn make_requests_async(reqs) {
+fn make_requests_async(reqs: List(request.Request(String))) {
   let tasks = list.map(reqs, fn(req) { task.async(fn() { hackney.send(req) }) })
 
   let responses = list.map(tasks, fn(tsk) { task.await_forever(tsk) })
 
-  result.all(responses)
+  case result.all(responses) {
+    Ok(result) -> Ok(result)
+    Error(err) -> {
+      io.debug(err)
+      Error("cannot make requests")
+    }
+  }
 }
 
 fn parse_responses(responses: List(response.Response(String))) {
   let lst_city_temp =
     list.map(responses, fn(res) { city_temp_from_json(res.body) })
 
-  result.all(lst_city_temp)
+  case result.all(lst_city_temp) {
+    Ok(result) -> Ok(result)
+    Error(err) -> {
+      io.debug(err)
+      Error("cannot parse responses")
+    }
+  }
 }
 
 pub fn sort_results(lst_city_temp: List(CityTemp)) {
@@ -85,9 +98,13 @@ pub fn sort_results(lst_city_temp: List(CityTemp)) {
   io.println("All cities -")
   io.debug(sorted)
 
-  let city_max_temp = list.last(sorted)
-
-  result.try(city_max_temp, fn(c) { Ok(c.city_name) })
+  case list.last(sorted) {
+    Ok(c) -> Ok(c.city_name)
+    Error(err) -> {
+      io.debug(err)
+      Error("error in sorting results")
+    }
+  }
 }
 
 pub fn main() {
@@ -99,11 +116,24 @@ pub fn main() {
   // parse response
   // get hottest city
 
-  let cities = result.unwrap(read_cities_from_file("cities.csv"), [])
-  let reqs = result.unwrap(build_requests(cities), [])
-  let responses = result.unwrap(make_requests_async(reqs), [])
-  let cities = result.unwrap(parse_responses(responses), [])
-  let answer = result.unwrap(sort_results(cities), "")
+  // let cities = result.unwrap(read_cities_from_file("cities.csv"), [])
+  // let reqs = result.unwrap(build_requests(cities), [])
+  // let responses = result.unwrap(make_requests_async(reqs), [])
+  // let cities = result.unwrap(parse_responses(responses), [])
+  // let answer = result.unwrap(sort_results(cities), "Error!")
+
+  let answer =
+    "cities.csv"
+    |> read_cities_from_file
+    |> result.map(build_requests)
+    |> result.flatten
+    |> result.map(make_requests_async)
+    |> result.flatten
+    |> result.map(parse_responses)
+    |> result.flatten
+    |> result.map(sort_results)
+    |> result.flatten
+    |> result.unwrap("Error!")
 
   io.debug("Answer is - " <> answer)
 }
