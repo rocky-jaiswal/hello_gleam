@@ -113,7 +113,7 @@ pub fn main() {
   // read cities
   // build requests
   // make requests in parallel
-  // parse response
+  // parse responses into a list of cities and their temparatures
   // get hottest city
 
   // let cities = result.unwrap(read_cities_from_file("cities.csv"), [])
@@ -135,5 +135,5 @@ pub fn main() {
     |> result.flatten
     |> result.unwrap("Error!")
 
-  io.debug("Answer is - " <> answer)
+  io.print("Answer is - " <> answer)
 }
